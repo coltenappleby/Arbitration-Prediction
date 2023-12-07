@@ -28,7 +28,6 @@ class RTLearner(object):
 		:param data_y: The value we are attempting to predict given the X data  		  	   		  		 		  		  		    	 		 		   		 		  
 		:type data_y: numpy.ndarray  		  	   		  		 		  		  		    	 		 		   		 		  
 		"""
-
 		self.tree = self.build_tree(data_x, data_y)
 		return self.tree
 
@@ -47,15 +46,17 @@ class RTLearner(object):
 		right_train_bool = x_train[:, factor_index] > split_val
 
 		# Prevents infinite looping
-		if np.alltrue(left_train_bool) or np.alltrue(right_train_bool):
+		if np.all(left_train_bool) or np.all(right_train_bool):
 			return np.array([["leaf", np.mean(y_train), None, None]])
 
 		larry = self.build_tree(x_train[left_train_bool], y_train[left_train_bool])
 		roger = self.build_tree(x_train[right_train_bool], y_train[right_train_bool])
 
-		root = np.array([[factor_index, split_val, 1, larry.shape[0]]])
+		root = np.array([[factor_index, split_val, 1, larry.shape[0]]]) # Change to +1
 
 		return np.vstack((root, larry, roger))
+
+
 
 
 	def query(self, points):
@@ -87,6 +88,3 @@ class RTLearner(object):
 				node = self.tree[i]
 
 		return node[1]
-
-	def print_rt(self):
-		print(self.tree)

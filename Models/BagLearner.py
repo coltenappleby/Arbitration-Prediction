@@ -1,8 +1,6 @@
 import math
 
 import numpy as np
-import DTLearner as dt
-import RTLearner as rt
 
 class BagLearner(object):
 	"""
@@ -29,14 +27,15 @@ class BagLearner(object):
 			# create a learner and train it
 			self.learners[i] = learner(**kwargs) # create a learner model
 
-	def get_data(self, x_train, y_train):
+	def get_sample(self, x_train, y_train):
 		indices = np.random.choice(len(x_train), int(y_train.shape[0]*.6), replace=False)
 		return x_train[indices], y_train[indices]
 
 	def add_evidence(self, x_train, y_train):
 		for learner in self.learners:
-			x_train, y_train = self.get_data(x_train, y_train)
-			learner.add_evidence(x_train, y_train)
+			x_train_sample, y_train_sample = self.get_sample(x_train, y_train)
+			learner.add_evidence(x_train_sample, y_train_sample)
+		# print(self.learners)
 
 	def query(self, x_test):
 		"""
