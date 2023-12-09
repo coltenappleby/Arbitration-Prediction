@@ -79,8 +79,71 @@ def collect_arb_data():
 		print(err)
 
 
+def collect_salary_data():
+	"""Shows basic usage of the Sheets API.
+	Prints values from a sample spreadsheet.
+	"""
+
+	SAMPLE_SPREADSHEET_ID_ARB = "1qxfZP9F05K7mIO4Kwv5D6hEbvtmAutIc807GSfoCQ1A"
+	MLB_SALARY_DATA = "12XSXOQpjDJDCJKsA4xC1e_9FlS11aeioZy_p1nqpclg"
+	ARB_SHEATNAME = "MLB-2023 Arb by WARP!A4:L"
+	api_responses = []
+
+	start_year = 2010
+	end_year = 2023
+
+	creds = None
+	# The file token.json stores the user's access and refresh tokens, and is
+	# created automatically when the authorization flow completes for the first
+	# time.
+	if os.path.exists("token.json"):
+		creds = Credentials.from_authorized_user_file("token.json", SCOPES)
+
+	salaries = pd.DataFrame(columns = ['Player', 'Position', 'MLS', 'Salary', 'Year'])
+
+	# If there are no (valid) credentials available, let the user log in.
+	if not creds or not creds.valid:
+		if creds and creds.expired and creds.refresh_token:
+			creds.refresh(Request())
+		else:
+			flow = InstalledAppFlow.from_client_secrets_file(
+				"credentials.json", SCOPES
+			)
+			creds = flow.run_local_server(port=0)
+		# Save the credentials for the next run
+		with open("token.json", "w") as token:
+			token.write(creds.to_json())
+
+	try:
+		service = build("sheets", "v4", credentials=creds)
+
+		for year in range(start_year, end_year + 1):
+			# Call the Sheets API
+			sheet = service.spreadsheets()
+			result = (
+				sheet.values()
+				.get(spreadsheetId=MLB_SALARY_DATA, range=f"{year}.xls!A3:D")
+				.execute()
+			)
+			values = result.get("values", [])
+
+			if not values:
+				print("No data found.")
+				return
+			salary = pd.DataFrame(values, columns=['Player', 'Position', 'MLS', 'Salary'])
+			salary['Year'] = year
+
+			salaries = pd.concat([salaries,salary])
+			# api_responses.append(values)
+
+		return salaries
+
+	except HttpError as err:
+		print(err)
+
+
 def get_fangraphs_data(
-		start_year=2010,
+		start_year=2005,
 		end_year=2023,
 		position="all",
 		stats="bat",  # pit
@@ -127,6 +190,10 @@ if __name__ == "__main__":
 	# print(cleaned_data.head())
 	# cleaned_data.to_csv('./data/mlb-salaries_2010-2023.csv', index=False)
 
-	get_fangraphs_data(stats='pit')
+	get_fangraphs_data(stats='bat', start_year=2005, end_year=2023)
+
+
+	# salary_2010_2023 = collect_salary_data()
+	# salary_2010_2023.to_csv('./data/mlb-salaries_2010-2023.csv', index=False)
 
 
