@@ -9,43 +9,56 @@ from matplotlib import pyplot as plt
 from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LinearRegression
 from sklearn.metrics import mean_squared_error, r2_score
-def RandomForest():
+
+
+def preprocess():
 	# load in the data
-	filename = 'data/arb-predictor-data_bat_step1.csv'
+	filename = 'data/arb-data-with-stats_bats.csv'
 	data = pd.read_csv(filename)
 
-	data.dropna(subset=['G', 'Year Salary'], inplace=True)
-	data = data.loc[~((data['Season'] < 2024) & (data['Next Year Salary'].isna()))]
+	# data.dropna(subset=['G', 'Year Salary'], inplace=True)
+	# data = data.loc[~((data['Season'] < 2024) & (data['Next Year Salary'].isna()))]
+	data.drop(['Next Year Salary', 'Salary', 'SeasonStat'], axis=1, inplace=True)
 
-	identifier = data['Player']
+	# identifier = data['Player']
 	data['Player'] = data.pop('Player')
-	data['playerid'] = data.pop('playerid')
-	data['Season'] = data.pop('Season')
+	# data['playerid'] = data.pop('playerid')
+	# data['Season'] = data.pop('Season')
 
-	x_train = data[data['Season'] < 2023].drop(['Next Year Salary'], axis=1).values
-	x_train = x_train[:, :-3] # remove Player, playerid and Season
-	y_train = data[data['Season'] < 2023]['Next Year Salary'].values
+	stat_to_predict = 'Salary Diff'
 
-	x_test = data[data['Season'] == 2023].drop(['Next Year Salary'], axis=1).values
-	y_test = data[data['Season'] == 2023]['Next Year Salary'].values
-	test_names = data[data['Season'] == 2023]['Player'].values
+	x_train = data[data['Year'] < 2023].drop([stat_to_predict], axis=1).values
+	x_train = x_train[:, :-1]  # remove Player
+	y_train = data[data['Year'] < 2023][stat_to_predict].values
 
-	x_2024 = data[data['Season'] == 2024].drop(['Next Year Salary'], axis=1).values
-	y_2024 = data[data['Season'] == 2024]['Next Year Salary'].values
-	names_2024 = data[data['Season'] == 2024]['Player'].values
+	x_test = data[data['Year'] == 2023].drop([stat_to_predict], axis=1).values
+	x_test = x_test[:, :-1]  # remove Player
+	y_test = data[data['Year'] == 2023][stat_to_predict].values
+	test_names = data[data['Year'] == 2023]['Player'].values
+
+	x_2024 = data[data['Year'] == 2024].drop([stat_to_predict], axis=1).values
+	y_2024 = data[data['Year'] == 2024][stat_to_predict].values
+	names_2024 = data[data['Year'] == 2024]['Player'].values
+
+	return x_train, x_test, y_train, y_test, test_names, x_2024, y_2024, names_2024
+
+def RandomForest():
+
+	x_train, x_test, y_train, y_test, test_names, x_2024, y_2024, names_2024 = preprocess()
 
 	# train the model
 	leaf_size = 5
 	bags = 20
+	runs = 50
 
 	#### BAG LEARNER ####
-	bagTrainRMSE = np.empty(50, float)
-	bagTestRMSE = np.empty(50, float)
+	bagTrainRMSE = np.empty(runs, float)
+	bagTestRMSE = np.empty(runs, float)
 
-	salary_2023 = np.empty((50, y_test.shape[0]), float)
-	salary_2024 = np.empty((50, y_2024.shape[0]), float)
+	salary_2023 = np.empty((runs, y_test.shape[0]), float)
+	salary_2024 = np.empty((runs, y_2024.shape[0]), float)
 
-	for i in range(50):
+	for i in range(runs):
 		learner = bl.BagLearner(learner=rt.RTLearner, kwargs={"leaf_size": leaf_size}, bags=bags, boost=False,
 								verbose=False)
 		learner.add_evidence(x_train, y_train)  # train it
@@ -64,7 +77,7 @@ def RandomForest():
 	pred_y = np.mean(salary_2023, axis=0)
 	salary_2023_estimate = np.column_stack((test_names, y_test, pred_y))
 	df = pd.DataFrame(salary_2023_estimate)
-	df.to_csv('./data/salary_2023_estimate.csv')
+	df.to_csv('./predictions/salary_2023_estimate.csv')
 
 	avg_diff_2023 = np.mean(np.abs(y_test - pred_y))
 	print(f"Average Difference 2023: {avg_diff_2023}")
@@ -72,8 +85,7 @@ def RandomForest():
 	salary_2024_mean = np.mean(salary_2024, axis=0)
 	salary_2024_estimate = np.column_stack((names_2024, salary_2024_mean))
 	df = pd.DataFrame(salary_2024_estimate)
-	df.to_csv('./data/salary_2024_estimate.csv')
-
+	df.to_csv('./predictions/salary_2024_estimate.csv')
 
 	print(f"Test RMSE: {np.mean(bagTestRMSE)}")
 	print(f"Train RMSE: {np.mean(bagTrainRMSE)}")
@@ -93,34 +105,15 @@ def RandomForest():
 	# Apply the formatter to the y-axis
 	plt.gca().yaxis.set_major_formatter(FuncFormatter(millions_formatter))
 
-	plt.show()
+	# plt.show()
 	# plt.show()
 	print(np.mean(y_test))
 	print(y_test)
 
 
-
-
 def LinearRegressionModel():
-	filename = 'data/arb-predictor-data_bat_step1.csv'
-	data = pd.read_csv(filename)
 
-	data.dropna(subset=['G', 'Year Salary'], inplace=True)
-	data = data.loc[~((data['Season'] < 2024) & (data['Next Year Salary'].isna()))]
-
-	identifier = data['Player']
-	data['Player'] = data.pop('Player')
-	data['playerid'] = data.pop('playerid')
-	data['Season'] = data.pop('Season')
-
-	x_train = data[data['Season'] < 2023].drop(['Next Year Salary'], axis=1).values
-	x_train = x_train[:, :-3] # remove Player, playerid and Season
-	y_train = data[data['Season'] < 2023]['Next Year Salary'].values
-
-	x_test = data[data['Season'] == 2023].drop(['Next Year Salary'], axis=1).values
-	x_test = x_test[:, :-3] # remove Player, playerid and Season
-	y_test = data[data['Season'] == 2023]['Next Year Salary'].values
-	test_names = data[data['Season'] == 2023]['Player'].values
+	x_train, x_test, y_train, y_test, test_names, x_2024, y_2024, names_2024 = preprocess()
 
 	# Create and fit the model
 	model = LinearRegression()
@@ -146,7 +139,7 @@ def LinearRegressionModel():
 	print("Mean Squared Error:", mse)
 	print("R-squared:", r2)
 
-	print(data.columns)
+	# print(data.columns)
 
 if "__main__" == __name__:
 	RandomForest()
