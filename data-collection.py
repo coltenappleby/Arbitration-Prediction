@@ -11,6 +11,8 @@ from googleapiclient.errors import HttpError
 
 import requests
 
+import time
+
 # https://developers.google.com/sheets/api/quickstart/python
 # If modifying these scopes, delete the file token.json.
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
@@ -149,16 +151,22 @@ def get_fangraphs_data(
 		stats="bat",  # pit
 		sort_stat="WAR",
 		qual=5,  # qualified is "y"
+
 ):
 	years = []
+	positions = ["c", "1b", "2b", "3b", "ss", "of", "dh"]
 
 	for year in range(start_year, end_year + 1):
-		url = f"https://www.fangraphs.com/api/leaders/major-league/data?age=&pos={position}&stats={stats}&lg=all&qual={qual}&season={year}&season1={year}&startdate=&enddate=&month=0&hand=&team=0&pageitems=2000000000&pagenum=1&ind=0&rost=0&players=&type=8&postseason=&sortdir=default&sortstat=WAR"
-		response = requests.get(url)
-		response.raise_for_status()
-		json_data = response.json()
-		df = pd.DataFrame(json_data['data'])
-		years.append(df)
+		for pos in positions:
+			print("Requesting data for year: ", year, " and position: ", pos)
+			url = f"https://www.fangraphs.com/api/leaders/major-league/data?age=&pos={pos}&stats={stats}&lg=all&qual={qual}&season={year}&season1={year}&startdate=&enddate=&month=0&hand=&team=0&pageitems=2000000000&pagenum=1&ind=0&rost=0&players=&type=8&postseason=&sortdir=default&sortstat=WAR"
+			response = requests.get(url)
+			response.raise_for_status()
+			json_data = response.json()
+			df = pd.DataFrame(json_data['data'])
+			df['Position'] = pos
+			years.append(df)
+			time.sleep(5)
 	merged_df = pd.concat(years, ignore_index=True)
 	merged_df.to_csv(f'./data/mlb-stats-{stats}-{start_year}-{end_year}.csv', index=False)
 
