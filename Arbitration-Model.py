@@ -19,126 +19,102 @@ def preprocess():
 
 	# data.dropna(subset=['G', 'Year Salary'], inplace=True)
 	# data = data.loc[~((data['Season'] < 2024) & (data['Next Year Salary'].isna()))]
-	data.drop(['Salary Diff', 'Salary', 'SeasonStat'], axis=1, inplace=True)
+
+	# data.drop(['Next Year Salary', 'Salary', 'SeasonStat'], axis=1, inplace=True)
+
+	columns_to_keep = ['Player', 'Salary Diff', 'Salary', 'Next Year Salary', 'Year', 'R', 'H', '2B', '3B', 'HR', 'RBI', 'SB', 'CS', 'BB', 'SO', 'AVG', 'TB']
+	data = data.loc[:, columns_to_keep]
+
+	columns_to_dro_cump = ['Player', 'Service', 'Year', 'Next Year Salary', 'Salary',
+	 'Salary Diff', 'SeasonStat', 'Age', 'G', 'PA', 'AB', 'R', 'H', '2B',
+	 '3B', 'HR', 'RBI', 'SB', 'CS', 'BB', 'SO', 'AVG', 'OBP', 'SLG', 'OPS',
+	 'GDP', 'HBP', 'SH', 'SF', 'IBB', 'WAR', 'Defense', 'Position', 'TB',
+	 'cum_sum_G', 'cum_sum_PA', 'cum_sum_AB', 'cum_sum_R', 'cum_sum_H',
+	 'cum_sum_2B', 'cum_sum_3B', 'cum_sum_HR', 'cum_sum_RBI', 'cum_sum_SB',
+	 'cum_sum_CS', 'cum_sum_BB', 'cum_sum_SO', 'cum_sum_TB', 'cum_sum_GDP',
+	 'cum_sum_HBP', 'cum_sum_SH', 'cum_sum_SF', 'cum_sum_IBB',
+	 'cum_sum_WAR']
 
 	# %%
-	dummies = pd.get_dummies(data['Position'], prefix='pos')
-	data = pd.concat([data, dummies], axis=1)
-	data.drop(['Position'], axis=1, inplace=True)
+	# dummies = pd.get_dummies(data['Position'], prefix='pos')
+	# data = pd.concat([data, dummies], axis=1)
+	# data.drop(['Position'], axis=1, inplace=True)
 
 	# identifier = data['Player']
 	data['Player'] = data.pop('Player')
+	data['Year'] = data.pop('Year')
+	data['Salary'] = data.pop('Salary')
+	data['Next Year Salary'] = data.pop('Next Year Salary')
 	# data['playerid'] = data.pop('playerid')
 	# data['Season'] = data.pop('Season')
 
-	stat_to_predict = 'Next Year Salary'
+	stat_to_predict = 'Salary Diff'
 
 	x_train = data[data['Year'] < 2023].drop([stat_to_predict], axis=1).values
-	x_train = x_train[:, :-1]  # remove Player
+	x_train = x_train[:, :-4]  # remove Player
 	y_train = data[data['Year'] < 2023][stat_to_predict].values
 
 	x_test = data[data['Year'] == 2023].drop([stat_to_predict], axis=1).values
-	x_test = x_test[:, :-1]  # remove Player
+	x_test = x_test[:, :-4]  # remove Player
 	y_test = data[data['Year'] == 2023][stat_to_predict].values
-	test_names = data[data['Year'] == 2023]['Player'].values
+	test_names = data[data['Year'] == 2023][['Player', 'Salary', 'Next Year Salary']].values
 
 	x_2024 = data[data['Year'] == 2024].drop([stat_to_predict], axis=1).values
+	x_2024 = x_2024[:, :-4]  # remove Player
 	y_2024 = data[data['Year'] == 2024][stat_to_predict].values
 	names_2024 = data[data['Year'] == 2024]['Player'].values
 
 	return x_train, x_test, y_train, y_test, test_names, x_2024, y_2024, names_2024
 
-def RandomForest():
+def prediction_comparison(my_preds,filename):
+	mlbtr_preds = pd.read_csv('data/mlbtr_2023_preds.csv')
 
-	x_train, x_test, y_train, y_test, test_names, x_2024, y_2024, names_2024 = preprocess()
+	merged = pd.merge(my_preds, mlbtr_preds, on='Player', how='inner')
 
-	# train the model
+	merged['Salary2023 Pred'] = (merged['Salary2022'] + merged['PredictedInc']).astype('Int64')
+	merged['Actual-ME'] = (merged['Actual2023Sal'] - merged['Salary2023 Pred']).astype('Int64')
+
+	merged['TR-ME'] = (merged['TR Pred Salary'] - merged['Salary2023 Pred']).astype('Int64')
+	merged['TR-A'] = (merged['Actual2023Sal'] - merged['TR Pred Salary']).astype('Int64')
+
+	merged.drop(['Service'], axis=1, inplace=True)
+	# merged['Predicted'] = merged['Predicted'].astype('Int64')
+	# merged['Actual'] = merged['Actual'].astype('Int64')
+	# merged['Delta'] = merged['Delta'].astype('Int64')
+
+	merged.to_csv(filename)
+
+	# print("Salary 2023")
+	table = tabulate(merged, headers='keys', tablefmt='jira', showindex=False, intfmt=',', numalign="right")
+	# print(table)
+	# return mlbtr
+
+
+def RandomForest(x_train, x_test, y_train, y_test, x_2024):
+
+
+	# Build and Train the Model
 	leaf_size = 5
-
-	#### Multiple Bag Learners ####
-	# bags = 20
-	# runs = 50
-	# bagTrainRMSE = np.empty(runs, float)
-	# bagTestRMSE = np.empty(runs, float)
-	# salary_2023 = np.empty((runs, y_test.shape[0]), float)
-	# salary_2024 = np.empty((runs, y_2024.shape[0]), float)
-	# for i in range(runs):
-	# 	learner = bl.BagLearner(learner=rt.RTLearner, kwargs={"leaf_size": leaf_size}, bags=bags, boost=False,
-	# 							verbose=False)
-	# 	learner.add_evidence(x_train, y_train)  # train it
-	# 	# Training Data
-	# 	pred_y = learner.query(x_train)
-	# 	TrainRmse = math.sqrt(((y_train - pred_y) ** 2).sum() / y_train.shape[0])  # TestRMSE
-	# 	bagTrainRMSE[i] = TrainRmse
-	# 	# Test
-	# 	pred_y = learner.query(x_test)
-	# 	salary_2023[i] = pred_y
-	# 	TestRmse = math.sqrt(((y_test - pred_y) ** 2).sum() / y_test.shape[0])  # TestRMSE
-	# 	bagTestRMSE[i] = TestRmse
-	# 	salary_2024[i] = learner.query(x_2024)
-
-	bags = 100
+	bags = 1000
 	learner = bl.BagLearner(learner=rt.RTLearner, kwargs={"leaf_size": leaf_size}, bags=bags, boost=False,
 							verbose=False)
-
 	learner.add_evidence(x_train, y_train)  # train it
-	# Training Data
-	y_pred = learner.query(x_train)
-	trainRmse = math.sqrt(((y_train - y_pred) ** 2).sum() / y_train.shape[0])  # TestRMSE
 
-	# Test
+	# Training Data
+	y_train_pred = learner.query(x_train)
+	trainRmse = math.sqrt(((y_train - y_train_pred) ** 2).sum() / y_train.shape[0])  # TestRMSE
+
+	# Testing Data
 	y_pred = learner.query(x_test)
 	testRmse = math.sqrt(((y_test - y_pred) ** 2).sum() / y_test.shape[0])  # TestRMSE
 
-	salary_2024 = learner.query(x_2024)
+	# Prediction Data
+	y_2024_pred = learner.query(x_2024)
 
-	#### Save the Estimates ####
-	# y_pred = np.mean(salary_2023, axis=0)
-	y_pred = y_pred.astype(int)
-	y_test = y_test.astype(int)
-	delta = y_test - y_pred
-	salary_2023_estimate = np.column_stack((test_names, y_test, y_pred, delta))
-	df = pd.DataFrame(salary_2023_estimate, columns=['Player', 'Actual', 'Predicted', "Difference"])
-	df.to_csv('./predictions/salary_2023_estimate.csv')
-
-	avg_diff_2023 = np.mean(np.abs(y_test - y_pred))
-
-	print("Salary 2023")
-	table = tabulate(df, headers='keys', tablefmt='pretty', showindex=False, intfmt=",")
-	print(table)
-	print(f"Average Difference 2023: {avg_diff_2023}")
-	print(f"Train RMSE: {trainRmse}")
-	print(f"Test RMSE: {testRmse}")
-
-	# salary_2024_mean = np.mean(salary_2024, axis=0)
-	salary_2024_estimate = np.column_stack((names_2024, salary_2024))
-	# df = pd.DataFrame(salary_2024_estimate)
-	# df.to_csv('./predictions/salary_2024_estimate.csv')
+	return y_pred, trainRmse, testRmse, y_2024_pred
 
 
-
-	residuals = y_test - y_pred
-
-	# Create a histogram of residuals
-	plt.hist(y_test, bins=20, color='blue', alpha=0.7)
-	plt.title('Histogram of Actual Salaries')
-	plt.xlabel('Values')
-	plt.ylabel('Frequency')
-
-	# Function to format y-axis labels in millions
-	def millions_formatter(x, pos):
-		return f'{x / 1e6:.1f}M'
-
-	# Apply the formatter to the y-axis
-	plt.gca().yaxis.set_major_formatter(FuncFormatter(millions_formatter))
-
-	# plt.show()
-	# plt.show()
-	# print(np.mean(y_test))
-	# print(y_test)
-
-
-def LinearRegressionModel():
+def LinearRegressionModel(x_train, x_test, y_train, y_test, x_2024):
 
 	x_train, x_test, y_train, y_test, test_names, x_2024, y_2024, names_2024 = preprocess()
 
@@ -148,32 +124,57 @@ def LinearRegressionModel():
 
 	# Make predictions on the test set
 	y_pred = model.predict(x_test)
+	y_2024_pred = model.predict(x_2024)
 
 	# Evaluate the model
-	mse = mean_squared_error(y_test, y_pred)
-	r2 = r2_score(y_test, y_pred)
+	test_mse = mean_squared_error(y_test, y_pred)
+	test_r2 = r2_score(y_test, y_pred)
 
-	#### Save the Estimates ####
-	pred_y = y_pred.astype(int)
-	y_test = y_test.astype(int)
-	delta = y_test - pred_y
-	salary_2023_estimate = np.column_stack((test_names, y_test, pred_y, delta))
-	df = pd.DataFrame(salary_2023_estimate, columns=['Player', 'Actual', 'Predicted', "Difference"])
-	print("Salary 2023")
-	table = tabulate(df, headers='keys', tablefmt='pretty', showindex=False, intfmt=",")
-	print(table)
-	# df.to_csv('./predictions/salary_2023_estimate.csv')
-	avg_diff_2023 = np.mean(np.abs(y_test - y_pred))
-	print(f"Average Difference 2023: {avg_diff_2023}")
+	coefficients = model.coef_
+	intercept = model.intercept_
+	print("Parameters:")
 
+	print(model.get_params())
 
-	# Print coefficients, intercept, and evaluation metrics
-	print("Coefficients:", model.coef_)
-	print("Intercept:", model.intercept_)
-	print("Mean Squared Error:", mse)
-	print("R-squared:", r2)
+	print("Coefficients:", coefficients)
+	print("Intercept:", intercept)
 
-	# print(data.columns)
+	return y_pred, test_mse, test_r2, y_2024_pred
 
 if "__main__" == __name__:
-	LinearRegressionModel()
+
+	x_train, x_test, y_train, y_test, test_names, x_2024, y_2024, names_2024 = preprocess()
+
+	#### RANDOM FOREST ####
+	# y_pred, trainRmse, testRmse, y_2024_pred = RandomForest(x_train, x_test, y_train, y_test, x_2024)
+	#
+	# #### Save the Estimates ####
+	# y_pred = y_pred.astype(int)
+	# y_test = y_test.astype(int)
+	#
+	# salary_2023_estimate = np.column_stack((test_names, y_test, y_pred))
+	# df = pd.DataFrame(salary_2023_estimate, columns=['Player', 'Salary2022', 'Actual2023Sal', 'Actual2023Inc', 'PredictedInc'])
+	# prediction_comparison(df, 'predictions/salary_2023_estimate_RF.csv')
+	#
+	# print("RANDOM FORREST")
+	# # print(f"Average Difference 2023: {avg_diff_2023}")
+	# print(f"Train RMSE: {trainRmse}")
+	# print(f"Test RMSE: {testRmse}")
+
+	#### LINEAR REGRESSION ####
+	print("LINEAR REGRESSION")
+	y_pred, test_mse, test_r2, y_2024_pred =  LinearRegressionModel(x_train, x_test, y_train, y_test, x_2024)
+
+	#### Save the Estimates ####
+	y_pred = y_pred.astype(int)
+	y_test = y_test.astype(int)
+
+	salary_2023_estimate = np.column_stack((test_names, y_test, y_pred))
+	df = pd.DataFrame(salary_2023_estimate,
+					  columns=['Player', 'Salary2022', 'Actual2023Sal', 'Actual2023Inc', 'PredictedInc'])
+	prediction_comparison(df, 'predictions/salary_2023_estimate_LR.csv')
+
+
+	# print(f"Average Difference 2023: {avg_diff_2023}")
+	print(f"Train mse: {test_mse}")
+	print(f"Test r^2: {test_r2}")
