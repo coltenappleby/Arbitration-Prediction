@@ -1,2 +1,6 @@
 credentials.json
 token.json
+.idea/*
+.idea/arbitration-predictor.iml
+.idea/misc.xml
+*/.idea/workspace.xml */.idea/tasks.xml
